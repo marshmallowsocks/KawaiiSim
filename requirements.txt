@@ -1,0 +1,8 @@
+Requirements to run KawaiiSim core -
+Python 2.7.x
+simpy 3.0.7
+numpy
+
+Requirements to run KawaiiSim UI -
+
+Core + PySide + matplotlib
