@@ -35,7 +35,8 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT
 from resources.ui import Ui_MainWindow
-from resources.core import *
+from resources.jni_core import SimulationSuite
+from prettytable import PrettyTable
 
 class NULL(QObject):
 
@@ -62,136 +63,12 @@ class RunBody(QObject):
 		
 	def run(self):
 
-		ABC.init()
-
 		with open(self.file,"r") as f:
 			data = pickle.load(f)
 			
-		hosts = [list(y) for x, y in groupby(data[0], lambda z: z == '\n') if not x]
-		datacenters = [list(y) for x, y in groupby(data[1], lambda z: z == '\n') if not x]
-		brokers = [list(y) for x, y in groupby(data[2], lambda z: z == '\n') if not x]
-		vms = [list(y) for x, y in groupby(data[3], lambda z: z == '\n') if not x]
-		cloudlets = [list(y) for x, y in groupby(data[4], lambda z: z == '\n') if not x]
-		
-		datacenterList = []
-		brokerList = []
-		
-		hostToDatacenter = defaultdict(list)
-		vmToBroker = defaultdict(list)
-		cloudletToBroker = defaultdict(list)
-		cloudletToVm = {}
-		dataframe = {}
+		simulation = SimulationSuite(data)
 
-		for host in hosts:
-			
-			hostId = host[0].split(',')
-
-			if len(hostId) == 1:
-				if host[7] == "Space Shared":
-					hostToDatacenter[int(host[8])].append(Host(int(host[0]),host[1],int(host[2]),int(host[3]),int(host[4]),int(host[6]),int(host[5]),Scheduler("Vm Scheduler","VmSpaceShared")))
-				else:
-					hostToDatacenter[int(host[8])].append(Host(int(host[0]),host[1],int(host[2]),int(host[3]),int(host[4]),int(host[6]),int(host[5]),Scheduler("Vm Scheduler","VmTimeShared")))
-			
-			else:
-				for Id in range(int(hostId[0]),int(hostId[1])+1):
-					if host[7] == "Space Shared":
-						hostToDatacenter[int(host[8])].append(Host(Id,host[1]+str(Id),int(host[2]),int(host[3]),int(host[4]),int(host[6]),int(host[5]),Scheduler("Vm Scheduler","VmSpaceShared")))
-					else:
-						hostToDatacenter[int(host[8])].append(Host(Id,host[1]+str(Id),int(host[2]),int(host[3]),int(host[4]),int(host[6]),int(host[5]),Scheduler("Vm Scheduler","VmTimeShared")))
-
-		for datacenter in datacenters:
-
-			datacenterId = datacenter[0].split(',')
-
-			if len(datacenterId) == 1:
-				datacenterList.append(Datacenter(int(datacenter[0]),datacenter[1],hostToDatacenter[int(datacenter[0])],float(datacenter[2])))
-				
-			else:
-				for Id in range(int(datacenterId[0]),int(datacenterId[1])+1):
-					datacenterList.append(Datacenter(Id,datacenter[1]+str(Id),hostToDatacenter[Id],float(datacenter[2])))
-					
-		for broker in brokers:
-
-			brokerId = broker[0].split(',')
-
-			if len(brokerId) == 1:
-				brokerList.append(Broker(int(broker[0]),broker[1]))
-			
-			else:
-				for Id in range(int(brokerId[0]),int(brokerId[1])+1):
-					brokerList.append(Broker(Id,broker[1]+str(Id)))
-		
-		for vm in vms:
-			
-			vmId = vm[0].split(',')
-
-			if len(vmId) == 1:
-				if vm[7] == "Space Shared":
-					temp = VM(int(vm[0]),vm[1],int(vm[2]),int(vm[3]),int(vm[4]),int(vm[6]),int(vm[5]),Scheduler("Cloudlet Scheduler","CloudletSpaceShared"))
-					vmToBroker[int(vm[8])].append(temp)
-				else:
-					temp = VM(int(vm[0]),vm[1],int(vm[2]),int(vm[3]),int(vm[4]),int(vm[6]),int(vm[5]),Scheduler("Cloudlet Scheduler","CloudletTimeShared"))
-					vmToBroker[int(vm[8])].append(temp)
-
-				cloudletToVm[int(vm[0])] = temp 
-				
-			else: 
-				for Id in range(int(vmId[0]),int(vmId[1])+1):
-					if vm[7] == "Space Shared":
-						temp = VM(Id,vm[1]+str(Id),int(vm[2]),int(vm[3]),int(vm[4]),int(vm[6]),int(vm[5]),Scheduler("Cloudlet Scheduler","CloudletSpaceShared"))
-						vmToBroker[int(vm[8])].append(temp)
-					else:
-						temp = VM(Id,vm[1]+str(Id),int(vm[2]),int(vm[3]),int(vm[4]),int(vm[6]),int(vm[5]),Scheduler("Cloudlet Scheduler","CloudletTimeShared"))
-						vmToBroker[int(vm[8])].append(temp)
-
-					cloudletToVm[Id] = temp
-					
-		for cloudlet in cloudlets:
-			
-			cloudletId = cloudlet[0].split(',')
-
-			if len(cloudletId) == 1:
-				
-				temp = Cloudlet(int(cloudlet[0]),cloudlet[1],int(cloudlet[2]),int(cloudlet[3]))
-				
-				if ',' not in cloudlet[4]:
-					temp.submissionTime = int(cloudlet[4])
-				
-				else:
-					times = cloudlet[4].split(',')
-					temp.submissionTime = int(self.randomGenerator(int(times[0]),int(times[1])))
-
-				if str(cloudlet[6]) is not '':
-					temp.vmID = cloudletToVm[int(cloudlet[6])].id
-				
-				cloudletToBroker[int(cloudlet[5])].append(temp)
-				
-			else:
-				for Id in range(int(cloudletId[0]),int(cloudletId[1])+1):
-					temp = Cloudlet(Id,cloudlet[1]+str(Id),int(cloudlet[2]),int(cloudlet[3]))
-					
-					if ',' not in cloudlet[4]:
-						temp.submissionTime = int(cloudlet[4])
-				
-					else:
-						times = cloudlet[4].split(',')
-						temp.submissionTime = int(self.randomGenerator(int(times[0]),int(times[1])))
-					
-					if str(cloudlet[6]) is not '':
-						temp.vmID = cloudletToVm[int(cloudlet[6])].id
-					cloudletToBroker[int(cloudlet[5])].append(temp)
-					
-		for broker in brokerList:
-			broker.addVMList(vmToBroker[broker.uid])
-			broker.addCloudletList(cloudletToBroker[broker.uid])
-			
-		ABC.startSimulation()
-		ABC.stopSimulation()
-
-		dataframe["brokerList"] = brokerList
-		dataframe["datacenterList"] = datacenterList
-
-		self.dataAcquired.emit(dataframe)
+		self.dataAcquired.emit(simulation.getDataframe())
 		self.finished.emit()
 
 	def randomGenerator(self,start,end,size=1):
@@ -405,7 +282,7 @@ class Window(QMainWindow):
 		self.brokers = []
 		self.userDict = {}
 
-		sys.stdout = NULL()#Output()
+		sys.stdout = Output()
 		#sys.stderr = Output() #Decomment for release candidate
 		sys.stdout.text.connect(self.output)
 		#sys.stderr.text.connect(self.error) #Decomment for release candidate
@@ -1061,7 +938,7 @@ class Window(QMainWindow):
 				sys.stdout.text.connect(self.output)
 
 			else:
-				sys.stdout = NULL()
+				sys.stdout = Output()
 				sys.stdout.text.connect(self.output)
 
 			self.main.outputButton.toggle()
@@ -1106,13 +983,7 @@ class Window(QMainWindow):
 		sys.stdout.text.connect(self.output)
 
 		for broker in self.dataframe["brokerList"]:
-			broker.getCloudletData(sortby=self.getSortMode())
-
-		for broker in self.dataframe["brokerList"]:
-			broker.logCost()
-
-		for datacenter in self.dataframe["datacenterList"]:
-			datacenter.logCost()
+			self.printLogs(broker.getCloudletReceivedList())
 
 		cloudlets = []
 		vms = []
@@ -1125,60 +996,41 @@ class Window(QMainWindow):
 			
 			brokers.append(broker)
 
-			for cloudlet in broker.getRecievedCloudlets():
+			for cloudlet in broker.getCloudletReceivedList():
 				cloudlets.append(cloudlet)
 
-		for broker in sorted(brokers,key=lambda x:x.uid):	
+		for broker in sorted(brokers,key=lambda x:x.getId()):	
 
-			self.broker[broker.uid] = {"cloudlets":defaultdict(list),"vms":defaultdict(list)}
-			self.broker["userCost"].append(broker.userCost)
-			self.brokers.append(broker.uid)
+			self.broker[broker.getId()] = {"cloudlets":defaultdict(list),"vms":defaultdict(list)}
+			self.brokers.append(broker.getId())
 
-			for cloudlet in broker.getRecievedCloudlets():
+			for cloudlet in broker.getCloudletReceivedList():
 
-				self.broker[broker.uid]["cloudlets"]["startTimes"].append(cloudlet.startTime[0])
-				self.broker[broker.uid]["cloudlets"]["finishTimes"].append(cloudlet.clockState)
-				self.broker[broker.uid]["cloudlets"]["submissionTime"].append(cloudlet.submissionTime)	
-				self.broker[broker.uid]["cloudlets"]["processingTime"].append(cloudlet.processingTime)
+				self.broker[broker.getId()]["cloudlets"]["startTimes"].append(cloudlet.getExecStartTime())
+				self.broker[broker.getId()]["cloudlets"]["finishTimes"].append(cloudlet.getFinishTime())
+				self.broker[broker.getId()]["cloudlets"]["submissionTime"].append(cloudlet.getSubmissionTime())	
+				self.broker[broker.getId()]["cloudlets"]["processingTime"].append(cloudlet.getActualCPUTime())
 
-			for vm in broker.getRecievedVms():
+			for vm in broker.getVmsCreatedList():
 
-				self.broker[broker.uid]["vms"]["startTimes"].append(0)
-				self.broker[broker.uid]["vms"]["finishTimes"].append(vm.clockState)
-				self.broker[broker.uid]["vms"]["tasks"].append(len(vm._cloudletList))	
-				self.broker[broker.uid]["vms"]["taskArrivals"].append([cloudlet.submissionTime for cloudlet in vm._cloudletList])
+				self.broker[broker.getId()]["vms"]["startTimes"].append(0)
+				self.broker[broker.getId()]["vms"]["finishTimes"].append(vm.getTotalUtilizationOfCpu())
+				self.broker[broker.getId()]["vms"]["tasks"].append(len(self.dataframe["cloudletToVm"][vm.getId]))	
+				self.broker[broker.getId()]["vms"]["taskArrivals"].append([cloudlet.getExecStartTime() for cloudlet in self.dataframe["cloudletToVm"][vm.getId]])
 
-		for cloudlet in sorted(cloudlets,key=lambda x:x.uid):
+		for cloudlet in sorted(cloudlets,key=lambda x:x.getCloudletId()):
 				
-			self.cloudlet["startTimes"].append(cloudlet.startTime[0])
-			self.cloudlet["finishTimes"].append(cloudlet.clockState)
-			self.cloudlet["submissionTime"].append(cloudlet.submissionTime)
-			self.cloudlet["processingTime"].append(cloudlet.processingTime) 
+			self.cloudlet["startTimes"].append(cloudlet.getExecStartTime())
+			self.cloudlet["finishTimes"].append(cloudlet.getFinishTime())
+			self.cloudlet["submissionTime"].append(cloudlet.getSubmissionTime())
+			self.cloudlet["processingTime"].append(cloudlet.getActualCPUTime()) 
 				
-		for datacenter in sorted(self.dataframe["datacenterList"],key=lambda x:x.uid):
-			
-			for vm in datacenter.datacenterManager.getFinishedVms():
-				vms.append(vm)
-
-			for host in datacenter._hostList:
-				hosts.append(host)
-				
-			self.datacenter["startTimes"].append(0)
-			self.datacenter["finishTimes"].append(datacenter.clockState)	
-			self.datacenter["totalCost"].append(datacenter.totalCost)
-
-		for vm in sorted(vms,key=lambda x:x.uid):
+		for vm in sorted(vms,key=lambda x:x.getId()):
 
 			self.vm["startTimes"].append(0)
-			self.vm["finishTimes"].append(vm.clockState)
-			self.vm["tasks"].append(len(vm._cloudletList))
-			self.vm["taskArrivals"].append([cloudlet.submissionTime for cloudlet in vm._cloudletList])
-		
-		for host in sorted(hosts,key=lambda x:x.uid):
-
-			self.host["startTimes"].append(0)
-			self.host["finishTimes"].append(host.clockState)
-			self.host["vms"].append(len(host._vmList))
+			self.vm["finishTimes"].append(vm.getTotalUtilizationOfCpu())
+			self.vm["tasks"].append(len(self.dataframe["cloudletToVm"][vm.getId]))	
+			self.vm["taskArrivals"].append([cloudlet.getExecStartTime() for cloudlet in self.dataframe["cloudletToVm"][vm.getId]])
 		
 		self.main.outputButton.toggle()
 		self.main.stackedWidget.setCurrentIndex(5)
@@ -1189,6 +1041,31 @@ class Window(QMainWindow):
 		self.progressDialog.setValue(1)
 		self.progressDialog.setLabelText("Finished Simulation.")
 		self.progressDialog.setCancelButtonText("OK")
+
+	def printLogs(self,results):
+
+		table = PrettyTable(["Cloudlet ID","STATUS","Datacenter ID","VM ID","Time","Start time","Finish time"])
+
+		print
+		print "========== OUTPUT =========="
+		
+		for cloudlet in results:
+		    
+			status = "FAILED"
+
+			if cloudlet.getCloudletStatus() == 4:
+				status = "SUCCESS"				
+
+			table.add_row([str(cloudlet.getCloudletId()), 
+						   status, 
+						   str(cloudlet.getResourceId()),
+						   str(cloudlet.getVmId()),
+						   str(cloudlet.getActualCPUTime()),
+						   str(cloudlet.getExecStartTime()),
+						   str(cloudlet.getFinishTime())])						
+
+		
+		print table
 
 	def open(self):
 
@@ -1637,8 +1514,6 @@ class Window(QMainWindow):
 		xAxis.addItem("")
 		xAxis.addItem("Cloudlets")
 		xAxis.addItem("VMs")
-		xAxis.addItem("Hosts")
-		xAxis.addItem("Datacenters")
 		xAxis.addItem("Brokers")
 		
 		self.userDict = {}
@@ -1724,42 +1599,6 @@ class Window(QMainWindow):
 								     ySelect.currentText()
 								    )
 				
-			elif str(xSelect.currentText()) == "Hosts":		
-				
-				if str(ySelect.currentText()) == "Total Uptime":
-					canvas.bar(self.host["startTimes"],
-						       self.host["finishTimes"],
-						       xSelect.currentText(),
-						       ySelect.currentText(),
-						       mean=self.main.actionSML.isChecked()
-						      )
-				
-				if str(ySelect.currentText()) == "VMs created":
-					canvas.bar([0 for _ in range(len(self.host["vms"]))],
-							   self.host["vms"],
-							   xSelect.currentText(),
-							   ySelect.currentText(),
-							   mean=self.main.actionSML.isChecked()
-							  )		
-
-			elif str(xSelect.currentText()) == "Datacenters":
-
-				if str(ySelect.currentText()) == "Total Uptime":
-					canvas.bar(self.datacenter["startTimes"],
-						       self.datacenter["finishTimes"],
-						       xSelect.currentText(),
-						       ySelect.currentText(),
-						       mean=self.main.actionSML.isChecked()
-						      )
-			
-				if str(ySelect.currentText()) == "Total Cost":
-					canvas.bar([0 for _ in range(len(self.datacenter["totalCost"]))],
-							   self.datacenter["totalCost"],
-							   xSelect.currentText(),
-							   ySelect.currentText(),
-							   mean=self.main.actionSML.isChecked()
-							  )	
-
 			elif str(xSelect.currentText()) == "Brokers":
 
 				if str(ySelect.currentText()) == "Total Cost":
